@@ -1,0 +1,157 @@
+/* ─── Reset ───────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html, body, #root { height: 100%; margin: 0; padding: 0; }
+
+body {
+  font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  background: #f4f6f8;
+  overflow-x: hidden;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ─── Page wrapper ────────────────────────────────────────────────────────── */
+.page {
+  width: 100%;
+  min-height: 100%;
+  padding: 20px 16px;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.page.center {
+  align-items: center;
+  min-height: 100vh;
+}
+
+/* ─── Card ────────────────────────────────────────────────────────────────── */
+.card {
+  width: 100%;
+  max-width: 400px;
+  background: #fff;
+  padding: 24px;
+  border-radius: 16px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.08);
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────────────── */
+.primary-btn {
+  padding: 14px 24px;
+  border: none;
+  background: #2fa98c;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  font-family: inherit;
+}
+.primary-btn:hover:not(:disabled)  { background: #259a7f; }
+.primary-btn:active:not(:disabled) { transform: scale(0.98); }
+.primary-btn.full                  { width: 100%; }
+.primary-btn:disabled              { opacity: 0.6; cursor: not-allowed; }
+
+.danger-btn {
+  padding: 7px 12px;
+  border: none;
+  background: #e63946;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  border-radius: 6px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.2s;
+}
+.danger-btn:hover { background: #c82333; }
+
+/* ─── Inputs ──────────────────────────────────────────────────────────────── */
+input, select {
+  width: 100%;
+  padding: 12px 14px;
+  border: 1.5px solid #dde1e7;
+  border-radius: 10px;
+  font-size: 16px; /* 16px prevents iOS zoom */
+  font-family: inherit;
+  background: #fff;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+input:focus, select:focus {
+  outline: none;
+  border-color: #2fa98c;
+  box-shadow: 0 0 0 3px rgba(47,169,140,0.12);
+}
+
+/* ─── Field block ─────────────────────────────────────────────────────────── */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 14px;
+}
+.field label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #555;
+}
+
+/* ─── Scanner ─────────────────────────────────────────────────────────────── */
+.scanner-box { width: 260px; height: 260px; }
+
+/* ─── Status / helpers ────────────────────────────────────────────────────── */
+.loading   { text-align: center; padding: 40px; color: #888; }
+.check     { font-size: 80px; color: #2fa98c; text-align: center; }
+.error-msg { color: #e63946; font-size: 13px; font-weight: 500; margin-top: 4px; }
+
+/* ─── Mobile ──────────────────────────────────────────────────────────────── */
+@media (max-width: 480px) {
+  .card { max-width: 100%; border-radius: 12px; }
+}
+
+/* ─── Payment row (Billing page) ──────────────────────────────────────────── */
+.payment-row,
+.radio-group {
+  display: flex;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.payment-option {
+  flex: 1;
+  padding: 11px;
+  border: 2px solid #e5e7eb;
+  border-radius: 10px;
+  text-align: center;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+  user-select: none;
+  background: #f9fafb;
+  color: #374151;
+}
+
+.payment-option.active {
+  border-color: #2fa98c;
+  background: #f0fdf9;
+  color: #065f46;
+}
+
+/* ─── Billing card ────────────────────────────────────────────────────────── */
+.billing-card {
+  max-width: 420px;
+}
+
+.product-name {
+  font-size: 20px;
+  font-weight: 700;
+  text-align: center;
+  margin: 0 0 4px;
+  color: #111827;
+}
