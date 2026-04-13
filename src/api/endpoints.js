@@ -29,8 +29,8 @@ export const submitBilling = (payload) =>
   API.post("/transactions/billing", payload);
 
 // Backend route: GET /transactions/daily  (not /dailyalltranction)
-export const getDailyTransactions = () =>
-  API.get("/transactions/daily");
+export const getDailyTransactions = (date) =>
+  API.get("/transactions/daily", { params: date ? { date } : {} });
 
 // Backend route: PATCH /transactions/rollback/:id  (not POST)
 export const rollbackTransaction = (id) =>

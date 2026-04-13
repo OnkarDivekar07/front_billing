@@ -7,6 +7,24 @@ import "./BillingModal.css";
 const UNIT_MULTIPLIER = { pcs: 1, jodi: 2, dozen: 12 };
 const UNIT_LABEL      = { pcs: "नग", jodi: "जोडी", dozen: "डझन" };
 
+const LS_DATE_KEY = "billing_selected_date";
+
+function getTodayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getInitialDate() {
+  try {
+    const stored = localStorage.getItem(LS_DATE_KEY);
+    if (stored) return stored;
+    const today = getTodayStr();
+    localStorage.setItem(LS_DATE_KEY, today);
+    return today;
+  } catch {
+    return getTodayStr();
+  }
+}
+
 /**
  * BillingModal — bottom-sheet billing form rendered as an overlay.
  * Opened when the user taps a product card on the Home page.
@@ -24,6 +42,7 @@ export default function BillingModal({ product, onClose, onSuccess }) {
   const [price,      setPrice]      = useState("");
   const [payment,    setPayment]    = useState("cash");
   const [submitting, setSubmitting] = useState(false);
+  const [billDate,   setBillDate]   = useState(getInitialDate);
 
   // Reset form and default unit whenever a new product is shown
   useEffect(() => {
@@ -77,6 +96,7 @@ export default function BillingModal({ product, onClose, onSuccess }) {
         {
           total_amount:   total,
           payment_method: payment,
+          billing_date:   billDate,
         },
       ];
 
@@ -117,6 +137,21 @@ export default function BillingModal({ product, onClose, onSuccess }) {
           {product.marathiName && product.name !== product.marathiName && (
             <p className="modal-product-sub">{product.name}</p>
           )}
+        </div>
+
+        {/* Date Selector */}
+        <div className="field">
+          <label>📅 बिलाची तारीख</label>
+          <input
+            type="date"
+            value={billDate}
+            max={getTodayStr()}
+            onChange={(e) => {
+              setBillDate(e.target.value);
+              try { localStorage.setItem(LS_DATE_KEY, e.target.value); } catch {}
+            }}
+            style={{ width: "100%" }}
+          />
         </div>
 
         {/* Quantity + Unit */}

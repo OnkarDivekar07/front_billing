@@ -8,6 +8,24 @@ import "../styles.css";
 const UNIT_MULTIPLIER = { pcs: 1, jodi: 2, dozen: 12 };
 const UNIT_LABEL      = { pcs: "नग", jodi: "जोडी", dozen: "डझन" };
 
+const LS_DATE_KEY = "billing_selected_date";
+
+function getTodayStr() {
+  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+}
+
+function getInitialDate() {
+  try {
+    const stored = localStorage.getItem(LS_DATE_KEY);
+    if (stored) return stored;
+    const today = getTodayStr();
+    localStorage.setItem(LS_DATE_KEY, today);
+    return today;
+  } catch {
+    return getTodayStr();
+  }
+}
+
 export default function Billing() {
   const { productId } = useParams();
   const navigate      = useNavigate();
@@ -20,6 +38,14 @@ export default function Billing() {
   const [payment,    setPayment]    = useState("cash");
   const [submitting, setSubmitting] = useState(false);
   const [loadError,  setLoadError]  = useState("");
+  const [billDate,   setBillDate]   = useState(getInitialDate);
+
+  // Persist date to localStorage whenever user manually changes it
+  const handleDateChange = (e) => {
+    const val = e.target.value;
+    setBillDate(val);
+    try { localStorage.setItem(LS_DATE_KEY, val); } catch {}
+  };
 
   useEffect(() => {
     setLoadError("");
@@ -70,6 +96,7 @@ export default function Billing() {
         {
           total_amount:   total,
           payment_method: payment,
+          billing_date:   billDate,
         },
       ];
 
@@ -86,6 +113,18 @@ export default function Billing() {
     <div className="page center">
       <div className="card billing-card">
         <h2 className="product-name">{displayName}</h2>
+
+        {/* Date Selector */}
+        <div className="field">
+          <label>📅 बिलाची तारीख</label>
+          <input
+            type="date"
+            value={billDate}
+            max={getTodayStr()}
+            onChange={handleDateChange}
+            style={{ width: "100%" }}
+          />
+        </div>
 
         {/* Quantity + Unit */}
         <div className="field">

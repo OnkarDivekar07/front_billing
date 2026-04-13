@@ -4,6 +4,27 @@ import { extractError } from "../utils/extractError";
 import { useToast } from "../components/Toast";
 import "./dailyEntries.css";
 
+const LS_DATE_KEY = "billing_selected_date";
+
+function getTodayStr() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getInitialDate() {
+  try {
+    const stored = localStorage.getItem(LS_DATE_KEY);
+    const today  = getTodayStr();
+    // Auto-reset to today if no stored date OR stored date is from a previous day
+    if (!stored || stored !== today) {
+      localStorage.setItem(LS_DATE_KEY, today);
+      return today;
+    }
+    return stored;
+  } catch {
+    return getTodayStr();
+  }
+}
+
 function formatDate(raw) {
   if (!raw) return "—";
   const d = new Date(raw);
@@ -15,13 +36,21 @@ export default function DailyEntries() {
   const [loading,      setLoading]      = useState(true);
   const [rollingBack,  setRollingBack]  = useState(null);
   const [error,        setError]        = useState(null);
+  const [selectedDate, setSelectedDate] = useState(getInitialDate);
   const toast = useToast();
 
-  const fetchTransactions = useCallback(async () => {
+  // Persist date whenever user manually changes it
+  const handleDateChange = (e) => {
+    const val = e.target.value;
+    setSelectedDate(val);
+    try { localStorage.setItem(LS_DATE_KEY, val); } catch {}
+  };
+
+  const fetchTransactions = useCallback(async (date) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await getDailyTransactions();
+      const res = await getDailyTransactions(date);
       setTransactions(res.data?.data ?? []);
     } catch (err) {
       setError(extractError(err));
@@ -30,7 +59,7 @@ export default function DailyEntries() {
     }
   }, []);
 
-  useEffect(() => { fetchTransactions(); }, [fetchTransactions]);
+  useEffect(() => { fetchTransactions(selectedDate); }, [fetchTransactions, selectedDate]);
 
   const handleRollback = async (id) => {
     if (!window.confirm("तुम्हाला ही transaction rollback करायची आहे का?")) return;
@@ -38,7 +67,7 @@ export default function DailyEntries() {
     try {
       await rollbackTransaction(id);
       toast.success("Transaction rollback झाली ✅");
-      fetchTransactions();
+      fetchTransactions(selectedDate);
     } catch (err) {
       toast.error(extractError(err));
     } finally {
@@ -50,9 +79,25 @@ export default function DailyEntries() {
     (sum, t) => sum + Number(t.totalAmount || 0), 0
   );
 
+  const dailyProfit = transactions.reduce(
+    (sum, t) => sum + Number(t.profit || 0), 0
+  );
+
   return (
     <div className="entries-page">
       <h2 className="entries-title">📘 दैनंदिन व्यवहार</h2>
+
+      {/* Date Selector */}
+      <div className="entries-date-row">
+        <label className="entries-date-label">📅 तारीख निवडा:</label>
+        <input
+          type="date"
+          value={selectedDate}
+          max={getTodayStr()}
+          onChange={handleDateChange}
+          className="entries-date-input"
+        />
+      </div>
 
       {error && (
         <div className="entries-error">⚠️ {error}</div>
@@ -61,7 +106,7 @@ export default function DailyEntries() {
       {loading ? (
         <p className="entries-status">लोड होत आहे...</p>
       ) : transactions.length === 0 ? (
-        <p className="entries-status">आज कोणतीही नोंद नाही</p>
+        <p className="entries-status">या तारखेला कोणतीही नोंद नाही</p>
       ) : (
         <div className="entries-wrapper">
           <table className="entries-table">
@@ -113,9 +158,12 @@ export default function DailyEntries() {
 
             <tfoot>
               <tr>
-                <td colSpan="4" className="total-label">आजची एकूण विक्री</td>
+                <td colSpan="4" className="total-label">एकूण विक्री</td>
                 <td className="total-amount">₹{dailyTotal.toFixed(2)}</td>
-                <td colSpan="2"></td>
+                <td className="total-amount" style={{ color: dailyProfit >= 0 ? "#16a34a" : "#dc2626" }}>
+                  ₹{dailyProfit.toFixed(2)}
+                </td>
+                <td></td>
               </tr>
             </tfoot>
           </table>
