@@ -4,18 +4,17 @@ import {
   createExpense,
   updateExpense,
   deleteExpense,
-  getBalanceSheet,
+  getExpenseSummary,
 } from "../api/endpoints";
 import { extractError } from "../utils/extractError";
 import { useToast } from "../components/Toast";
 import "./expenses.css";
 
-/* ── constants ────────────────────────────────────────────────────────────── */
-// expense_type values match backend ENUM: purchase | transport | miscellaneous
+/* ── constants ──────────────────────────────────────────────────────────────── */
 const CATEGORIES = [
-  { value: "purchase",      label: "📦 खरेदी"   },
-  { value: "transport",     label: "🚚 वाहतूक"   },
-  { value: "miscellaneous", label: "📋 इतर"      },
+  { value: "purchase",      label: "📦 खरेदी"  },
+  { value: "transport",     label: "🚚 वाहतूक"  },
+  { value: "miscellaneous", label: "📋 इतर"     },
 ];
 
 const PAYMENT_METHODS = [
@@ -23,17 +22,11 @@ const PAYMENT_METHODS = [
   { value: "online", label: "📲 ऑनलाईन" },
 ];
 
-const RANGES = [
-  { value: "today", label: "आज"           },
-  { value: "week",  label: "या आठवड्यात"  },
-  { value: "month", label: "या महिन्यात"  },
-  { value: "year",  label: "या वर्षात"    },
-];
+const CAT_MAP     = Object.fromEntries(CATEGORIES.map((c) => [c.value, c.label]));
+const CAT_COLOR   = { purchase: "#e0f2fe", transport: "#fef9c3", miscellaneous: "#f3e8ff" };
+const CAT_TEXT    = { purchase: "#0369a1", transport: "#a16207",  miscellaneous: "#7e22ce" };
 
-const CAT_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.value, c.label]));
-const PAY_MAP = Object.fromEntries(PAYMENT_METHODS.map((p) => [p.value, p.label]));
-
-function today() {
+function todayStr() {
   return new Date().toISOString().slice(0, 10);
 }
 
@@ -44,104 +37,105 @@ function fmt(n) {
   });
 }
 
-// ── Empty form uses real DB field names ──────────────────────────────────────
+// Build YYYY-MM from year+month numbers
+function toYearMonth(year, month) {
+  return `${year}-${String(month).padStart(2, "0")}`;
+}
+
+// From YYYY-MM → { from: YYYY-MM-01, to: YYYY-MM-last }
+function monthRange(ym) {
+  const [y, m] = ym.split("-").map(Number);
+  const from = new Date(y, m - 1, 1).toISOString().slice(0, 10);
+  const to   = new Date(y, m, 0).toISOString().slice(0, 10);
+  return { from, to };
+}
+
+function currentYM() {
+  const now = new Date();
+  return toYearMonth(now.getFullYear(), now.getMonth() + 1);
+}
+
+// Build last 12 months for the month picker
+function buildMonthOptions() {
+  const opts = [];
+  const now  = new Date();
+  for (let i = 0; i < 12; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym = toYearMonth(d.getFullYear(), d.getMonth() + 1);
+    const label = d.toLocaleDateString("mr-IN", { month: "long", year: "numeric" });
+    opts.push({ value: ym, label });
+  }
+  return opts;
+}
+
+const MONTH_OPTIONS = buildMonthOptions();
+
 const EMPTY_FORM = {
   description:    "",
-  total_amount:   "",
-  expense_type:   "miscellaneous",
+  total_bill:     "",
+  expense_type:   "purchase",
   payment_method: "cash",
-  expense_date:   today(),
+  expense_date:   todayStr(),
+  supplier_name:  "",
   notes:          "",
 };
 
-/* ── component ────────────────────────────────────────────────────────────── */
+/* ── component ─────────────────────────────────────────────────────────────── */
 export default function Expenses() {
   const toast = useToast();
 
-  const [expenses,     setExpenses]     = useState([]);
-  const [range,        setRange]        = useState("month");
-  const [loading,      setLoading]      = useState(true);
-  const [fetchError,   setFetchError]   = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(currentYM());
+  const [expenses,      setExpenses]      = useState([]);
+  const [summary,       setSummary]       = useState(null);
+  const [loading,       setLoading]       = useState(true);
+  const [fetchError,    setFetchError]    = useState(null);
 
-  const [sheet,        setSheet]        = useState(null);
-  const [sheetLoading, setSheetLoading] = useState(true);
-  const [activeTab,    setActiveTab]    = useState("expenses");
+  const [form,          setForm]          = useState(EMPTY_FORM);
+  const [editId,        setEditId]        = useState(null);
+  const [showForm,      setShowForm]      = useState(false);
+  const [submitting,    setSubmitting]    = useState(false);
+  const [deletingId,    setDeletingId]    = useState(null);
 
-  const [form,         setForm]         = useState(EMPTY_FORM);
-  const [editId,       setEditId]       = useState(null);
-  const [showForm,     setShowForm]     = useState(false);
-  const [submitting,   setSubmitting]   = useState(false);
-  const [deletingId,   setDeletingId]   = useState(null);
-
-  /* ── fetch expenses ──────────────────────────────────────────────────────── */
-  const fetchExpenses = useCallback(async () => {
+  /* ── fetch ────────────────────────────────────────────────────────────────── */
+  const fetchAll = useCallback(async () => {
     setLoading(true);
     setFetchError(null);
     try {
-      // Backend getExpenses accepts { from, to, expense_type } — we pass range
-      // via from/to computed from the range label so service buildDateRange works
-      const now = new Date();
-      let from, to;
-      if (range === "today") {
-        from = to = today();
-      } else if (range === "week") {
-        const s = new Date(now); s.setDate(now.getDate() - now.getDay());
-        const e = new Date(s);   e.setDate(s.getDate() + 6);
-        from = s.toISOString().slice(0, 10);
-        to   = e.toISOString().slice(0, 10);
-      } else if (range === "month") {
-        from = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
-        to   = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
-      } else if (range === "year") {
-        from = `${now.getFullYear()}-01-01`;
-        to   = `${now.getFullYear()}-12-31`;
-      }
-      const res = await getExpenses({ from, to });
-      setExpenses(res.data?.data ?? []);
+      const { from, to } = monthRange(selectedMonth);
+      const [expRes, sumRes] = await Promise.all([
+        getExpenses({ from, to }),
+        getExpenseSummary(),
+      ]);
+      setExpenses(expRes.data?.data ?? []);
+      setSummary(sumRes.data?.data ?? null);
     } catch (err) {
       setFetchError(extractError(err));
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [selectedMonth]);
 
-  /* ── fetch balance sheet ─────────────────────────────────────────────────── */
-  const fetchSheet = useCallback(async () => {
-    setSheetLoading(true);
-    try {
-      const res = await getBalanceSheet(range);
-      setSheet(res.data?.data ?? null);
-    } catch {
-      setSheet(null);
-    } finally {
-      setSheetLoading(false);
-    }
-  }, [range]);
-
-  useEffect(() => {
-    fetchExpenses();
-    fetchSheet();
-  }, [fetchExpenses, fetchSheet]);
+  useEffect(() => { fetchAll(); }, [fetchAll]);
 
   /* ── form helpers ─────────────────────────────────────────────────────────── */
-  const setField = (key, val) => setForm((prev) => ({ ...prev, [key]: val }));
+  const setField = (key, val) => setForm((p) => ({ ...p, [key]: val }));
 
   const openAdd = () => {
-    setForm({ ...EMPTY_FORM, expense_date: today() });
+    setForm({ ...EMPTY_FORM, expense_date: todayStr() });
     setEditId(null);
     setShowForm(true);
   };
 
-  // Populate form from a row — map DB fields → form fields
   const openEdit = (exp) => {
     setForm({
       description:    exp.description,
-      total_amount:   String(exp.total_amount),
+      total_bill:     String(exp.total_amount),
       expense_type:   exp.expense_type,
       payment_method: exp.payment_method,
       expense_date:   exp.expense_date
         ? new Date(exp.expense_date).toISOString().slice(0, 10)
-        : today(),
+        : todayStr(),
+      supplier_name:  exp.Supplier?.name || "",
       notes:          exp.notes || "",
     });
     setEditId(exp.id);
@@ -150,26 +144,22 @@ export default function Expenses() {
 
   const closeForm = () => { setShowForm(false); setEditId(null); };
 
-  /* ── submit (create / update) ────────────────────────────────────────────── */
+  /* ── submit ──────────────────────────────────────────────────────────────── */
   const handleSubmit = async () => {
     if (!form.description.trim()) { toast.warn("वर्णन भरा"); return; }
-    if (!form.total_amount || Number(form.total_amount) <= 0) {
+    if (!form.total_bill || Number(form.total_bill) <= 0) {
       toast.warn("योग्य रक्कम भरा"); return;
     }
-
     setSubmitting(true);
     try {
-      // Payload uses exact backend field names
       const payload = {
         description:    form.description.trim(),
-        // For edit: send as total_bill (direct mode) so service accepts it
-        total_bill:     Number(form.total_amount),
+        total_bill:     Number(form.total_bill),
         expense_type:   form.expense_type,
         payment_method: form.payment_method,
-        expense_date:   form.expense_date || today(),
+        expense_date:   form.expense_date || todayStr(),
         notes:          form.notes.trim() || undefined,
       };
-
       if (editId) {
         await updateExpense(editId, payload);
         toast.success("खर्च अपडेट झाला ✅");
@@ -178,8 +168,7 @@ export default function Expenses() {
         toast.success("खर्च जोडला ✅");
       }
       closeForm();
-      await fetchExpenses();
-      await fetchSheet();
+      await fetchAll();
     } catch (err) {
       toast.error(extractError(err));
     } finally {
@@ -195,7 +184,6 @@ export default function Expenses() {
       await deleteExpense(id);
       toast.success("खर्च काढला ✅");
       setExpenses((prev) => prev.filter((e) => e.id !== id));
-      await fetchSheet();
     } catch (err) {
       toast.error(extractError(err));
     } finally {
@@ -203,233 +191,121 @@ export default function Expenses() {
     }
   };
 
-  // Footer total — use total_amount (DB field)
-  const listTotal = expenses.reduce((s, e) => s + Number(e.total_amount || 0), 0);
+  /* ── derived totals ──────────────────────────────────────────────────────── */
+  const monthTotal     = expenses.reduce((s, e) => s + Number(e.total_amount || 0), 0);
+  const purchaseTotal  = expenses.filter((e) => e.expense_type === "purchase").reduce((s, e) => s + Number(e.total_amount || 0), 0);
+  const transportTotal = expenses.filter((e) => e.expense_type === "transport").reduce((s, e) => s + Number(e.total_amount || 0), 0);
+  const miscTotal      = expenses.filter((e) => e.expense_type === "miscellaneous").reduce((s, e) => s + Number(e.total_amount || 0), 0);
+
+  const selectedLabel  = MONTH_OPTIONS.find((o) => o.value === selectedMonth)?.label || selectedMonth;
 
   /* ── render ──────────────────────────────────────────────────────────────── */
   return (
     <div className="exp-page">
-      {/* Header */}
-      <div className="exp-header">
-        <div className="exp-header-top">
+
+      {/* ── Top summary block ─────────────────────────────────────────────── */}
+      <div className="exp-summary-block">
+        <div className="exp-summary-header">
           <div>
-            <h2 className="exp-title">💸 खर्च &amp; बॅलन्स शीट</h2>
-            <p className="exp-subtitle">दुकानाचे सर्व खर्च आणि नफा-तोटा येथे पाहा</p>
+            <h2 className="exp-page-title">💸 खर्च</h2>
+            <p className="exp-page-sub">ऑपरेटिंग खर्चाचा मागोवा</p>
           </div>
-          <button className="exp-add-btn" onClick={openAdd}>+ खर्च जोडा</button>
+          <select
+            className="exp-month-select"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+          >
+            {MONTH_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
         </div>
 
-        {/* Range selector */}
-        <div className="exp-range-bar">
-          {RANGES.map((r) => (
-            <button
-              key={r.value}
-              className={`exp-range-btn ${range === r.value ? "active" : ""}`}
-              onClick={() => setRange(r.value)}
-            >
-              {r.label}
-            </button>
-          ))}
+        <div className="exp-total-row">
+          <span className="exp-total-label">{selectedLabel} — एकूण खर्च</span>
+          <span className="exp-total-value">₹{fmt(monthTotal)}</span>
         </div>
 
-        {/* Tab switcher */}
-        <div className="exp-tabs">
-          <button
-            className={`exp-tab ${activeTab === "expenses" ? "active" : ""}`}
-            onClick={() => setActiveTab("expenses")}
-          >
-            खर्च यादी
-          </button>
-          <button
-            className={`exp-tab ${activeTab === "balance" ? "active" : ""}`}
-            onClick={() => setActiveTab("balance")}
-          >
-            बॅलन्स शीट
-          </button>
+        <div className="exp-breakdown-row">
+          <div className="exp-breakdown-chip purchase">
+            <span className="exp-chip-label">📦 खरेदी</span>
+            <span className="exp-chip-value">₹{fmt(purchaseTotal)}</span>
+          </div>
+          <div className="exp-breakdown-chip transport">
+            <span className="exp-chip-label">🚚 वाहतूक</span>
+            <span className="exp-chip-value">₹{fmt(transportTotal)}</span>
+          </div>
+          <div className="exp-breakdown-chip misc">
+            <span className="exp-chip-label">📋 इतर</span>
+            <span className="exp-chip-value">₹{fmt(miscTotal)}</span>
+          </div>
         </div>
       </div>
 
-      {/* ── EXPENSES TAB ─────────────────────────────────────────────────── */}
-      {activeTab === "expenses" && (
-        <>
-          {fetchError && <div className="exp-error">⚠️ {fetchError}</div>}
+      {/* ── List header ──────────────────────────────────────────────────── */}
+      <div className="exp-list-header">
+        <span className="exp-list-count">
+          {loading ? "लोड होत आहे..." : `${expenses.length} नोंदी`}
+        </span>
+        <button className="exp-add-btn" onClick={openAdd}>+ खर्च जोडा</button>
+      </div>
 
-          {loading ? (
-            <div className="exp-status">लोड होत आहे...</div>
-          ) : expenses.length === 0 ? (
-            <div className="exp-empty">
-              या कालावधीत कोणताही खर्च नोंदवलेला नाही
-            </div>
-          ) : (
-            <div className="exp-list-wrap">
-              <ul className="exp-list">
-                {expenses.map((exp) => (
-                  <li key={exp.id} className="exp-row">
-                    <div className="exp-row-left">
-                      <div className="exp-row-top">
-                        {/* description replaces title */}
-                        <span className="exp-row-title">{exp.description}</span>
-                        {/* total_amount replaces amount */}
-                        <span className="exp-row-amount">₹{fmt(exp.total_amount)}</span>
-                      </div>
-                      <div className="exp-row-meta">
-                        {/* expense_type replaces category */}
-                        <span className="exp-cat-badge">
-                          {CAT_MAP[exp.expense_type] || exp.expense_type}
-                        </span>
-                        {/* payment_method replaces paymentMethod */}
-                        <span className="exp-pay-badge">
-                          {PAY_MAP[exp.payment_method] || exp.payment_method}
-                        </span>
-                        {/* expense_date replaces date */}
-                        <span className="exp-date">
-                          {exp.expense_date
-                            ? new Date(exp.expense_date).toLocaleDateString("en-IN")
-                            : "—"}
-                        </span>
-                        {/* notes replaces note */}
-                        {exp.notes && (
-                          <span className="exp-note" title={exp.notes}>
-                            📝 {exp.notes}
-                          </span>
-                        )}
-                        {/* Show supplier name if present */}
-                        {exp.Supplier && (
-                          <span className="exp-note">🏪 {exp.Supplier.name}</span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="exp-row-actions">
-                      <button className="exp-edit-btn" onClick={() => openEdit(exp)}>
-                        ✏️
-                      </button>
-                      <button
-                        className="exp-del-btn"
-                        onClick={() => handleDelete(exp.id, exp.description)}
-                        disabled={deletingId === exp.id}
-                      >
-                        {deletingId === exp.id ? "..." : "✕"}
-                      </button>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+      {/* ── Error ────────────────────────────────────────────────────────── */}
+      {fetchError && <div className="exp-error">⚠️ {fetchError}</div>}
 
-              <div className="exp-list-footer">
-                <span>एकूण {expenses.length} खर्च</span>
-                <span className="exp-list-total">₹{fmt(listTotal)}</span>
-              </div>
-            </div>
-          )}
-        </>
+      {/* ── List ─────────────────────────────────────────────────────────── */}
+      {!loading && expenses.length === 0 && !fetchError && (
+        <div className="exp-empty">या महिन्यात कोणताही खर्च नाही</div>
       )}
 
-      {/* ── BALANCE SHEET TAB ────────────────────────────────────────────── */}
-      {activeTab === "balance" && (
-        sheetLoading ? (
-          <div className="exp-status">बॅलन्स शीट लोड होत आहे...</div>
-        ) : !sheet ? (
-          <div className="exp-error">बॅलन्स शीट लोड होऊ शकली नाही</div>
-        ) : (
-          <div className="bs-wrap">
-
-            {/* Income card */}
-            <div className="bs-card income">
-              <h3 className="bs-card-title">📈 उत्पन्न (विक्री)</h3>
-              <div className="bs-rows">
-                <div className="bs-row">
-                  <span>एकूण विक्री</span>
-                  <strong>₹{fmt(sheet.income.totalSales)}</strong>
+      {!loading && expenses.length > 0 && (
+        <ul className="exp-list">
+          {expenses.map((exp) => (
+            <li key={exp.id} className="exp-row">
+              <div className="exp-row-left">
+                <div className="exp-row-top">
+                  <span className="exp-row-title">{exp.description}</span>
+                  <span className="exp-row-amount">₹{fmt(exp.total_amount)}</span>
                 </div>
-                <div className="bs-row sub">
-                  <span>रोख विक्री</span>
-                  <span>₹{fmt(sheet.income.cashSales)}</span>
-                </div>
-                <div className="bs-row sub">
-                  <span>ऑनलाईन विक्री</span>
-                  <span>₹{fmt(sheet.income.onlineSales)}</span>
-                </div>
-                <div className="bs-row">
-                  <span>एकूण नफा (किंमत वजा)</span>
-                  <strong className={sheet.income.grossProfit >= 0 ? "green" : "red"}>
-                    ₹{fmt(sheet.income.grossProfit)}
-                  </strong>
-                </div>
-                <div className="bs-row sub">
-                  <span>एकूण व्यवहार</span>
-                  <span>{sheet.income.transactionCount}</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Expenses card */}
-            <div className="bs-card expenses">
-              <h3 className="bs-card-title">💸 खर्च</h3>
-              <div className="bs-rows">
-                <div className="bs-row">
-                  <span>एकूण खर्च</span>
-                  <strong className="red">₹{fmt(sheet.expenses.total)}</strong>
-                </div>
-                {Object.entries(sheet.expenses.byCategory || {}).map(([cat, amt]) => (
-                  <div key={cat} className="bs-row sub">
-                    <span>{CAT_MAP[cat] || cat}</span>
-                    <span>₹{fmt(amt)}</span>
-                  </div>
-                ))}
-                {sheet.expenses.count === 0 && (
-                  <div className="bs-row sub">
-                    <span>कोणताही खर्च नाही</span><span>—</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Liabilities card */}
-            <div className="bs-card liabilities">
-              <h3 className="bs-card-title">⚠️ देणी (Repayments)</h3>
-              <div className="bs-rows">
-                <div className="bs-row">
-                  <span>एकूण देणी</span>
-                  <strong className="red">₹{fmt(sheet.liabilities.total)}</strong>
-                </div>
-                {sheet.liabilities.items.map((r) => (
-                  <div key={r.id} className="bs-row sub">
-                    <span>{r.supplierName}</span>
-                    <span>₹{fmt(r.amountOwed)}</span>
-                  </div>
-                ))}
-                {sheet.liabilities.count === 0 && (
-                  <div className="bs-row sub">
-                    <span>कोणतीही देणी नाही</span><span>—</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Summary card */}
-            <div className={`bs-card summary ${sheet.summary.isProfit ? "profit" : "loss"}`}>
-              <h3 className="bs-card-title">🧾 एकूण स्थिती</h3>
-              <div className="bs-rows">
-                <div className="bs-row">
-                  <span>निव्वळ उत्पन्न (विक्री − खर्च)</span>
-                  <strong className={sheet.summary.netIncome >= 0 ? "green" : "red"}>
-                    ₹{fmt(sheet.summary.netIncome)}
-                  </strong>
-                </div>
-                <div className="bs-row">
-                  <span>देणी वजा केल्यावर</span>
-                  <strong className={sheet.summary.netBalance >= 0 ? "green" : "red"}>
-                    ₹{fmt(sheet.summary.netBalance)}
-                  </strong>
+                <div className="exp-row-meta">
+                  <span
+                    className="exp-cat-badge"
+                    style={{
+                      background: CAT_COLOR[exp.expense_type] || "#f3f4f6",
+                      color:      CAT_TEXT[exp.expense_type]  || "#374151",
+                    }}
+                  >
+                    {CAT_MAP[exp.expense_type] || exp.expense_type}
+                  </span>
+                  <span className={`exp-pay-badge ${exp.payment_method}`}>
+                    {exp.payment_method === "cash" ? "💵 रोख" : "📲 ऑनलाईन"}
+                  </span>
+                  <span className="exp-date">
+                    {exp.expense_date
+                      ? new Date(exp.expense_date).toLocaleDateString("en-IN")
+                      : "—"}
+                  </span>
+                  {exp.Supplier && (
+                    <span className="exp-supplier">🏪 {exp.Supplier.name}</span>
+                  )}
+                  {exp.notes && (
+                    <span className="exp-note" title={exp.notes}>📝 {exp.notes}</span>
+                  )}
                 </div>
               </div>
-              <div className={`bs-verdict ${sheet.summary.isProfit ? "profit" : "loss"}`}>
-                {sheet.summary.isProfit ? "✅ फायदा" : "❌ तोटा"}
+              <div className="exp-row-actions">
+                <button className="exp-edit-btn" onClick={() => openEdit(exp)}>✏️</button>
+                <button
+                  className="exp-del-btn"
+                  onClick={() => handleDelete(exp.id, exp.description)}
+                  disabled={deletingId === exp.id}
+                >
+                  {deletingId === exp.id ? "..." : "✕"}
+                </button>
               </div>
-            </div>
-
-          </div>
-        )
+            </li>
+          ))}
+        </ul>
       )}
 
       {/* ── Add / Edit Modal ──────────────────────────────────────────────── */}
@@ -444,12 +320,29 @@ export default function Expenses() {
               <button className="exp-modal-close" onClick={closeForm}>✕</button>
             </div>
 
-            {/* description (was: title) */}
+            {/* expense_type */}
+            <div className="field">
+              <label>प्रकार</label>
+              <div className="exp-type-row">
+                {CATEGORIES.map((c) => (
+                  <button
+                    key={c.value}
+                    type="button"
+                    className={`exp-type-btn ${form.expense_type === c.value ? "active" : ""}`}
+                    onClick={() => setField("expense_type", c.value)}
+                  >
+                    {c.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* description */}
             <div className="field">
               <label>वर्णन *</label>
               <input
                 type="text"
-                placeholder="उदा. जुलै भाडे, वीज बिल, माल खरेदी..."
+                placeholder="उदा. माल खरेदी, गाडी भाडे, वीज बिल..."
                 value={form.description}
                 onChange={(e) => setField("description", e.target.value)}
                 autoFocus
@@ -457,7 +350,7 @@ export default function Expenses() {
               />
             </div>
 
-            {/* total_amount (was: amount) */}
+            {/* amount */}
             <div className="field">
               <label>रक्कम (₹) *</label>
               <input
@@ -465,27 +358,14 @@ export default function Expenses() {
                 inputMode="decimal"
                 min="0"
                 placeholder="0.00"
-                value={form.total_amount}
-                onChange={(e) => setField("total_amount", e.target.value)}
+                value={form.total_bill}
+                onChange={(e) => setField("total_bill", e.target.value)}
               />
             </div>
 
-            {/* expense_type (was: category) */}
+            {/* date */}
             <div className="field">
-              <label>प्रकार</label>
-              <select
-                value={form.expense_type}
-                onChange={(e) => setField("expense_type", e.target.value)}
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* expense_date (was: date) */}
-            <div className="field">
-              <label>तारीख</label>
+              <label>📅 तारीख</label>
               <input
                 type="date"
                 value={form.expense_date}
@@ -493,7 +373,19 @@ export default function Expenses() {
               />
             </div>
 
-            {/* payment_method (was: paymentMethod) */}
+            {/* supplier (optional text — no dropdown since supplier_id is optional) */}
+            <div className="field">
+              <label>पुरवठादार (ऐच्छिक)</label>
+              <input
+                type="text"
+                placeholder="पुरवठादाराचे नाव"
+                value={form.supplier_name}
+                onChange={(e) => setField("supplier_name", e.target.value)}
+                maxLength={100}
+              />
+            </div>
+
+            {/* payment_method */}
             <div className="field">
               <label>पेमेंट पद्धत</label>
               <div className="exp-pay-row">
@@ -514,7 +406,7 @@ export default function Expenses() {
               </div>
             </div>
 
-            {/* notes (was: note) */}
+            {/* notes */}
             <div className="field">
               <label>नोंद (ऐच्छिक)</label>
               <input
@@ -527,18 +419,10 @@ export default function Expenses() {
             </div>
 
             <div className="exp-modal-footer">
-              <button
-                className="exp-cancel-btn"
-                onClick={closeForm}
-                disabled={submitting}
-              >
+              <button className="exp-cancel-btn" onClick={closeForm} disabled={submitting}>
                 रद्द करा
               </button>
-              <button
-                className="primary-btn"
-                onClick={handleSubmit}
-                disabled={submitting}
-              >
+              <button className="primary-btn" onClick={handleSubmit} disabled={submitting}>
                 {submitting ? "सेव्ह होत आहे..." : editId ? "बदला" : "जोडा"}
               </button>
             </div>
