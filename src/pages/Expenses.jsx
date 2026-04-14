@@ -76,7 +76,6 @@ const EMPTY_FORM = {
   expense_type:   "purchase",
   payment_method: "cash",
   expense_date:   todayStr(),
-  supplier_name:  "",
   notes:          "",
 };
 
@@ -135,7 +134,6 @@ export default function Expenses() {
       expense_date:   exp.expense_date
         ? new Date(exp.expense_date).toISOString().slice(0, 10)
         : todayStr(),
-      supplier_name:  exp.Supplier?.name || "",
       notes:          exp.notes || "",
     });
     setEditId(exp.id);
@@ -152,13 +150,17 @@ export default function Expenses() {
     }
     setSubmitting(true);
     try {
+      const amount = Number(form.total_bill);
       const payload = {
         description:    form.description.trim(),
-        total_bill:     Number(form.total_bill),
         expense_type:   form.expense_type,
         payment_method: form.payment_method,
         expense_date:   form.expense_date || todayStr(),
         notes:          form.notes.trim() || undefined,
+        // Backend: total_bill for purchase, unit_cost for transport/miscellaneous
+        ...(form.expense_type === "purchase"
+          ? { total_bill: amount }
+          : { unit_cost: amount }),
       };
       if (editId) {
         await updateExpense(editId, payload);
@@ -370,18 +372,6 @@ export default function Expenses() {
                 type="date"
                 value={form.expense_date}
                 onChange={(e) => setField("expense_date", e.target.value)}
-              />
-            </div>
-
-            {/* supplier (optional text — no dropdown since supplier_id is optional) */}
-            <div className="field">
-              <label>पुरवठादार (ऐच्छिक)</label>
-              <input
-                type="text"
-                placeholder="पुरवठादाराचे नाव"
-                value={form.supplier_name}
-                onChange={(e) => setField("supplier_name", e.target.value)}
-                maxLength={100}
               />
             </div>
 
