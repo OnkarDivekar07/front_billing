@@ -4,7 +4,6 @@ import {
   createExpense,
   updateExpense,
   deleteExpense,
-  getExpenseSummary,
 } from "../api/endpoints";
 import { extractError } from "../utils/extractError";
 import { useToast } from "../components/Toast";
@@ -100,12 +99,8 @@ export default function Expenses() {
     setFetchError(null);
     try {
       const { from, to } = monthRange(selectedMonth);
-      const [expRes, sumRes] = await Promise.all([
-        getExpenses({ from, to }),
-        getExpenseSummary(),
-      ]);
+      const expRes = await getExpenses({ from, to });
       setExpenses(expRes.data?.data ?? []);
-      setSummary(sumRes.data?.data ?? null);
     } catch (err) {
       setFetchError(extractError(err));
     } finally {
