@@ -85,7 +85,6 @@ export default function Expenses() {
 
   const [selectedMonth, setSelectedMonth] = useState(currentYM());
   const [expenses,      setExpenses]      = useState([]);
-  const [summary,       setSummary]       = useState(null);
   const [loading,       setLoading]       = useState(true);
   const [fetchError,    setFetchError]    = useState(null);
 
