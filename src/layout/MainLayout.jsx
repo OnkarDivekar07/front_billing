@@ -3,12 +3,13 @@ import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import "./layout.css";
 
 const NAV = [
-  { to: "/",              label: "🏠 होम",             end: true  },
-  { to: "/search",        label: "🔍 प्रॉडक्ट शोधा",  end: false },
-  { to: "/daily",         label: "📘 दैनंदिन नोंदी",   end: false },
-  { to: "/search-stock",  label: "📦 स्टॉक अपडेट",    end: false },
-  { to: "/missing-items", label: "🛒 नसलेल्या वस्तू",  end: false },
-  { to: "/expenses",       label: "💸 खर्च व बॅलन्स",        end: false },
+  { to: "/",                  label: "🏠 होम",               end: true  },
+  { to: "/search",            label: "🔍 प्रॉडक्ट शोधा",    end: false },
+  { to: "/daily",             label: "📘 दैनंदिन नोंदी",     end: false },
+  { to: "/search-stock",      label: "📦 स्टॉक अपडेट",      end: false },
+  { to: "/stock-update-log",  label: "🗂️ स्टॉक नोंदी",      end: false },
+  { to: "/missing-items",     label: "🛒 नसलेल्या वस्तू",    end: false },
+  { to: "/expenses",          label: "💸 खर्च व बॅलन्स",    end: false },
 ];
 
 export default function MainLayout() {

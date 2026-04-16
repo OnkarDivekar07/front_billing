@@ -23,6 +23,15 @@ export const getProductById = (id) =>
 export const addStock = (payload) =>
   API.post("/products/add-stock", payload);
 
+// ─── Stock Update Logs ────────────────────────────────────────────────────────
+// GET /products/stock-logs?date=YYYY-MM-DD
+export const getStockLogs = (date) =>
+  API.get("/products/stock-logs", { params: date ? { date } : {} });
+
+// POST /products/stock-logs/:id/rollback
+export const rollbackStockLog = (id) =>
+  API.post(`/products/stock-logs/${id}/rollback`);
+
 // ─── Transactions ──────────────────────────────────────────────────────────────
 // Backend route: POST /transactions/billing  (not /billingTranction)
 export const submitBilling = (payload) =>
@@ -56,13 +65,19 @@ export const incrementMissingItem = (id, requestCount) =>
 export const deleteMissingItem = (id) =>
   API.delete(`/missing-items/${id}`);
 
+// ─── Suppliers ─────────────────────────────────────────────────────────────────
+// Backend route: GET /suppliers
+export const getSuppliers = () =>
+  API.get("/suppliers");
+
 // ─── Expenses ──────────────────────────────────────────────────────────────────
 // Backend routes: /expenses
 export const getExpenses = (params = {}) =>
   API.get("/expenses", { params });
 
-export const getExpenseSummary = (range) =>
-  API.get("/expenses/summary", { params: range ? { range } : {} });
+// GET /expenses/summary?from=YYYY-MM-DD&to=YYYY-MM-DD
+export const getExpenseSummary = (params = {}) =>
+  API.get("/expenses/summary", { params });
 
 export const createExpense = (payload) =>
   API.post("/expenses", payload);

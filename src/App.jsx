@@ -14,6 +14,7 @@ import SearchProducts from "./pages/SearchProducts";
 import SearchStock    from "./pages/SearchStock";
 import MissingItems   from "./pages/MissingItems";
 import Expenses       from "./pages/Expenses";
+import StockUpdateLog from "./pages/StockUpdateLog";
 
 import "./styles.css";
 
@@ -41,6 +42,7 @@ export default function App() {
             <Route path="/add-stock/:productId" element={<AddStock />} />
             <Route path="/missing-items"  element={<MissingItems />} />
             <Route path="/expenses"       element={<Expenses />} />
+            <Route path="/stock-update-log" element={<StockUpdateLog />} />
           </Route>
 
           {/* Full-screen flow pages — no sidebar */}
