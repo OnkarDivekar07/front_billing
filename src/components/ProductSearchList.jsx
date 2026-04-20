@@ -10,7 +10,7 @@ import "../pages/search.css";
  * @param {Function} onSelect  — called with the product object when a row is tapped
  * @param {Function} renderRow — optional custom row renderer (product) => ReactNode
  */
-export default function ProductSearchList({ title, onSelect, renderRow }) {
+export default function ProductSearchList({ title, onSelect, renderRow, footer }) {
   const { filtered, search, setSearch, loading, error } = useProductSearch();
 
   return (
@@ -54,6 +54,7 @@ export default function ProductSearchList({ title, onSelect, renderRow }) {
             )}
           </div>
         )}
+        {footer}
       </div>
     </div>
   );
