@@ -232,3 +232,68 @@
 .card-stock.low {
   color: #dc2626;
 }
+
+/* ─── Customer count bar ──────────────────────────────────────────────────── */
+.customer-count-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #fff;
+  border-top: 1px solid #f3f4f6;
+  padding: 10px 16px;
+  gap: 12px;
+}
+.customer-count-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+.customer-count-icon { font-size: 16px; line-height: 1; }
+.customer-count-label {
+  font-size: 13px;
+  color: #6b7280;
+  font-weight: 500;
+}
+.customer-count-value {
+  font-size: 18px;
+  font-weight: 700;
+  color: #2fa98c;
+  min-width: 28px;
+}
+.customer-count-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.customer-count-input {
+  width: 80px;
+  padding: 7px 10px;
+  font-size: 14px;
+  border: 1.5px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  text-align: center;
+  transition: border-color 0.2s;
+}
+.customer-count-input:focus {
+  outline: none;
+  border-color: #2fa98c;
+  background: #fff;
+}
+.customer-count-btn {
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #2fa98c;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+  white-space: nowrap;
+}
+.customer-count-btn:hover:not(:disabled) { background: #25907a; }
+.customer-count-btn:active:not(:disabled) { transform: scale(0.96); }
+.customer-count-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.customer-count-btn.saved { background: #16a34a; }

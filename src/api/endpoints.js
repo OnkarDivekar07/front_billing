@@ -92,3 +92,21 @@ export const deleteExpense = (id) =>
 // GET /finance/balance-sheet?range=today|week|month|year|YYYY-MM-DD..YYYY-MM-DD
 export const getBalanceSheet = (range) =>
   API.get("/finance/balance-sheet", { params: range ? { range } : {} });
+
+// ─── Customer Count ──────────────────────────────────────────────────────────
+// GET  /customer-count/today  → { count }
+// POST /customer-count/update → body: { change: number } → { count }
+// NOTE: backend increments/decrements by 1 per call regardless of change value.
+//       Frontend handles bulk via looped calls (see Home.jsx saveCount).
+export const getTodayCustomerCount = () =>
+  API.get("/customer-count/today");
+
+export const updateCustomerCount = (change) =>
+  API.post("/customer-count/update", { change });
+
+// ─── Products (create) ────────────────────────────────────────────────────────
+// POST /products/addproduct
+// body: { name (required), price (required >0), marathiName?, quantity?, defaultUnit? }
+// NOTE: backend requires price > 0 — frontend must enforce this.
+export const createProduct = (payload) =>
+  API.post("/products/addproduct", payload);

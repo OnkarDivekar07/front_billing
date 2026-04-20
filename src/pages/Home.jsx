@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useProductSearch } from "../hooks/useProductSearch";
 import BillingModal from "../components/BillingModal";
+import { getTodayCustomerCount, updateCustomerCount } from "../api/endpoints";
 import "../styles.css";
 import "./home.css";
 
@@ -10,8 +11,56 @@ export default function Home() {
   const { filtered, search, setSearch, loading, error } = useProductSearch();
   const [selectedProduct, setSelectedProduct] = useState(null);
 
-  const handleCardClick    = (product) => setSelectedProduct(product);
-  const handleModalClose   = () => setSelectedProduct(null);
+  // ── Customer Count ────────────────────────────────────────────────────────
+  const [todayCount,  setTodayCount]  = useState(null);
+  const [countInput,  setCountInput]  = useState("");
+  const [countSaving, setCountSaving] = useState(false);
+  const [countSaved,  setCountSaved]  = useState(false);
+
+  useEffect(() => {
+    getTodayCustomerCount()
+      .then((res) => {
+        const c = res.data?.data?.count ?? res.data?.count ?? 0;
+        setTodayCount(c);
+      })
+      .catch(() => setTodayCount(0));
+  }, []);
+
+  const saveCount = async () => {
+    const target = parseInt(countInput, 10);
+    if (!countInput || isNaN(target) || target < 0) return;
+
+    const current = todayCount ?? 0;
+    const diff    = target - current;
+    if (diff === 0) { setCountInput(""); return; }
+
+    setCountSaving(true);
+    try {
+      // Backend incrementCount/decrementCount moves by 1 per call.
+      // We loop Math.abs(diff) times with step +1 or -1.
+      const step  = diff > 0 ? 1 : -1;
+      const steps = Math.abs(diff);
+      let latest  = current;
+
+      for (let i = 0; i < steps; i++) {
+        const res = await updateCustomerCount(step);
+        latest = res.data?.data?.count ?? res.data?.count ?? (latest + step);
+      }
+
+      setTodayCount(latest);
+      setCountInput("");
+      setCountSaved(true);
+      setTimeout(() => setCountSaved(false), 2000);
+    } catch {
+      // count display may be stale; page remains usable
+    } finally {
+      setCountSaving(false);
+    }
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const handleCardClick     = (product) => setSelectedProduct(product);
+  const handleModalClose    = () => setSelectedProduct(null);
   const handleBillingSuccess = () => {
     setSelectedProduct(null);
     navigate("/success");
@@ -43,6 +92,36 @@ export default function Home() {
         />
       </div>
 
+      {/* ── Customer Count Bar ───────────────────────────────────── */}
+      <div className="customer-count-bar">
+        <div className="customer-count-left">
+          <span className="customer-count-icon">👥</span>
+          <span className="customer-count-label">आजचे ग्राहक</span>
+          <span className="customer-count-value">
+            {todayCount === null ? "..." : todayCount}
+          </span>
+        </div>
+        <div className="customer-count-right">
+          <input
+            className="customer-count-input"
+            type="number"
+            inputMode="numeric"
+            min="0"
+            placeholder="संख्या"
+            value={countInput}
+            onChange={(e) => setCountInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && saveCount()}
+          />
+          <button
+            className={`customer-count-btn ${countSaved ? "saved" : ""}`}
+            onClick={saveCount}
+            disabled={countSaving || !countInput}
+          >
+            {countSaved ? "✓" : countSaving ? "..." : "सेव्ह"}
+          </button>
+        </div>
+      </div>
+
       {/* ── Content ─────────────────────────────────────────────── */}
       <div className="home-content">
 
@@ -57,7 +136,6 @@ export default function Home() {
           <div className="home-error">⚠️ {error}</div>
         )}
 
-        {/* Only show empty state when there's an active search term */}
         {!loading && !error && filtered.length === 0 && search.trim() && (
           <div className="home-empty">
             <p>&ldquo;{search}&rdquo; साठी कोणताही प्रॉडक्ट सापडला नाही</p>
@@ -101,7 +179,6 @@ function ProductCard({ product, onClick }) {
       tabIndex={0}
       onKeyDown={(e) => e.key === "Enter" && onClick()}
     >
-      {/* Image */}
       <div className="card-image-wrap">
         {product.imageUrl ? (
           <img
@@ -115,7 +192,6 @@ function ProductCard({ product, onClick }) {
         )}
       </div>
 
-      {/* Names */}
       <div className="card-names">
         {product.marathiName && (
           <p className="card-name-marathi">{product.marathiName}</p>
@@ -123,7 +199,6 @@ function ProductCard({ product, onClick }) {
         <p className="card-name-english">{product.name}</p>
       </div>
 
-      {/* Footer: unit left, stock right */}
       <div className="card-footer">
         <span className="card-unit">
           {product.defaultUnit === "jodi"  ? "जोडी"  :
